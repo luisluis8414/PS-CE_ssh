@@ -12,4 +12,7 @@ Themen:
 2. SCP
    1. SCP vs FTP
    2. SFTP
-   3. 
+
+Fokus auf Verwendung von SSH, Fingerprint Yes/no --> Keygen Bildchen und Keyaustausch
+
+Advanced: Package Typing analysis, Zeit zwischen Paket senden und Eingabe
