@@ -8,7 +8,8 @@ Themen:
   2. Logins im Vergleich
   -> Passwort, Key, Key with passphrase, ssh agent
   3. Tunnel
-  4. Fingerprint
+  4. Fingerprint --> SHA1 MD5 Collisions, storing, usage
 2. SCP
    1. SCP vs FTP
-   2. 
+   2. SFTP
+   3. 
