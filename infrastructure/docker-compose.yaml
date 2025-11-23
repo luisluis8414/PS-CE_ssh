@@ -1,0 +1,14 @@
+services:
+  server:
+    build:
+      context: ./server      
+      dockerfile: Dockerfile  
+    hostname: ssh-server
+    container_name: ssh-server
+
+  client:
+    build:
+      context: ./client       
+      dockerfile: Dockerfile  
+    hostname: ssh-client
+    container_name: ssh-client
