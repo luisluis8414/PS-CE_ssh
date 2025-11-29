@@ -1,0 +1,25 @@
+version: '3.9'
+
+services:
+
+  server:
+    build: ./server
+    container_name: server
+    ports:
+      - "2222:22"
+    tty: true
+    stdin_open: true
+
+  client:
+    build: ./client
+    container_name: client
+    tty: true
+    stdin_open: true
+    command: /bin/bash
+
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    tty: true
+    stdin_open: true
+    command: /run_msf.sh

