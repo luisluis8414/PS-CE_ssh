@@ -6,11 +6,11 @@ FROM docker.io/rockylinux/rockylinux:10.0
 RUN dnf install -y openssh-clients nano && \
     dnf clean all
 
-# Benutzer erstellen
+# user erstellen
 RUN useradd -m student && \
     echo "student:student123" | chpasswd
 
-# Als student starten
+# Als student user starten
 USER student
 WORKDIR /home/student
 

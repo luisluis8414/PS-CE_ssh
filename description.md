@@ -109,7 +109,7 @@ In the **client terminal**, perform the following steps:
 ssh admin@ssh-server
 ```
 
-**2. When prompted, type `yes` to accept the server's host key:**
+**2. Accept the servers host key:**
 
 When you connect, you will see a message like this:
 
@@ -179,7 +179,231 @@ You will return to the client's shell.
 
 ---
 
-## Exercise 2: Make it more secure
+## Exercise 2: Securing Your SSH Setup
+
+In Exercise 1, we used password authentication, which is simple but less secure. Passwords can be guessed, brute forced, or stolen. In this exercise, we will implement several security best practices:
+
+1. Change the SSH port from the default (22) to a non standard port
+2. Set up public key authentication
+3. Disable password authentication entirely
+
+### Step 1: Generate an SSH Key Pair on the Client
+
+In the **client terminal**, generate a new SSH key pair:
+
+```bash
+ssh-keygen -t ed25519 -C "student@ssh-client"
+```
+
+You will be prompted for:
+
+1. **File location**: Press Enter to accept the default (`~/.ssh/id_ed25519`)
+2. **Passphrase**: Enter a secure passphrase (e.g., `MySecurePass123!`)
+
+```
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/home/student/.ssh/id_ed25519):
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+```
+
+#### What is a Passphrase?
+
+A passphrase adds an extra layer of security to your private key. Even if someone steals your private key file, they cannot use it without knowing the passphrase [^8]. Think of it as a password that protects your key.
+
+#### Understanding the Key Pair
+
+This command creates two files [^8]:
+
+| File                    | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `~/.ssh/id_ed25519`     | Your **private key** - keep this secret and never share it! |
+| `~/.ssh/id_ed25519.pub` | Your **public key** - this can be shared freely             |
+
+You can view your public key with:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+### Step 2: Copy the Public Key to the Server
+
+Now we need to install your public key on the server. The `ssh-copy-id` command automates this process:
+
+```bash
+ssh-copy-id admin@ssh-server
+```
+
+Enter the password (`admin123`) when prompted. This command copies your public key to the server's `~/.ssh/authorized_keys` file.
+
+You should see output like:
+
+```
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'admin@ssh-server'"
+and check to make sure that only the key(s) you wanted were added.
+```
+
+### Step 3: Test Key Authentication
+
+Try connecting to the server again:
+
+```bash
+ssh admin@ssh-server
+```
+
+This time, instead of asking for the server password, SSH will ask for your **key passphrase**:
+
+```
+Enter passphrase for key '/home/student/.ssh/id_ed25519':
+```
+
+Enter the passphrase you created earlier. You should now be logged in!
+
+Exit the session:
+
+```bash
+exit
+```
+
+### Step 4: Change the SSH Port
+
+Using the default port 22 makes your server an easy target for automated attacks. Changing to a non standard port reduces this risk [^3].
+
+In the **server terminal**:
+
+**1. Edit the SSH daemon configuration:**
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+**2. Find the line `#Port 22` and change it to:**
+
+```
+Port 1234
+```
+
+(Remove the `#` to uncomment the line)
+
+**3. Save the file** (Ctrl+O, Enter, Ctrl+X)
+
+**4. Restart the SSH daemon:**
+
+First, stop the current daemon:
+
+```bash
+sudo pkill sshd
+```
+
+Then start it again:
+
+```bash
+sudo /usr/sbin/sshd
+```
+
+### Step 5: Connect Using the New Port
+
+In the **client terminal**, try connecting without specifying the port:
+
+```bash
+ssh admin@ssh-server
+```
+
+This will fail because SSH still tries port 22 by default.
+
+Now connect using the `-p` flag to specify the new port:
+
+```bash
+ssh -p 1234 admin@ssh-server
+```
+
+Enter your passphrase when prompted. You should be connected!
+
+Exit the session:
+
+```bash
+exit
+```
+
+### Step 6: Disable Password Authentication
+
+Now that key authentication works, we can disable password authentication entirely. This means only users with a valid key can connect.
+
+In the **server terminal**:
+
+**1. Edit the SSH daemon configuration:**
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+**2. Find and modify these lines:**
+
+```
+PasswordAuthentication no
+PubkeyAuthentication yes
+```
+
+**3. Save the file** (Ctrl+O, Enter, Ctrl+X)
+
+**4. Restart the SSH daemon:**
+
+```bash
+sudo pkill sshd
+sudo /usr/sbin/sshd
+```
+
+### Step 7: Verify Password Authentication is Disabled
+
+In the **client terminal**, let's verify that password authentication no longer works.
+
+First, try connecting with a forced password authentication:
+
+```bash
+ssh -p 1234 -o PubkeyAuthentication=no admin@ssh-server
+```
+
+This should fail with:
+
+```
+admin@ssh-server: Permission denied (publickey).
+```
+
+Now connect normally with your key:
+
+```bash
+ssh -p 1234 admin@ssh-server
+```
+
+Enter your passphrase and you should be connected!
+
+---
+
+**Congratulations!** You have successfully:
+
+- Generated an SSH key pair with a passphrase
+- Installed your public key on the server using `ssh-copy-id`
+- Changed the SSH port to a non-standard port
+- Disabled password authentication
+- Verified that only key authentication works
+
+---
+
+### Security Summary
+
+| Before                   | After                            |
+| ------------------------ | -------------------------------- |
+| Port 22 (default)        | Port 1234 (non-standard)         |
+| Password authentication  | Public key authentication        |
+| No passphrase protection | Passphrase-protected private key |
+
+These changes significantly improve your SSH security by:
+
+1. **Reducing automated attacks** - Most bots scan only port 22
+2. **Eliminating password guessing** - No password means no brute force attacks
+3. **Adding defense in depth** - Even if your private key is stolen, the attacker still needs your passphrase
 
 ---
 

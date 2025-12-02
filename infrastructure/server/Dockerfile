@@ -6,7 +6,7 @@ FROM docker.io/rockylinux/rockylinux:10.0
 RUN dnf install -y openssh-server nano procps-ng sudo  && \
     dnf clean all
 
-# Benutzer erstellen
+# user erstellen
 RUN useradd -m admin && \
     echo "admin:admin123" | chpasswd && \
     usermod -aG wheel admin

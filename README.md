@@ -1,5 +1,41 @@
 # PS-CE_ssh
 
+## Tutorial
+
+To setup the container environments:
+
+```bash
+cd infrastructure
+```
+
+start the containers:
+
+```bash
+docker composer up -d
+```
+
+connect to either container:
+
+```bash
+# For the server container
+docker exec -it ssh-server bash -l
+
+# For the client container
+docker exec -it ssh-client bash -l
+```
+
+## Restart (fresh setup from 0)
+
+```
+docker compose down && docker compose up -d
+```
+
+## Rebuild (when change in Dockerfile)
+
+```
+docker compose down && docker compose up -d --build
+```
+
 https://www.jfranken.de/homepages/johannes/vortraege/ssh3.de.html
 
 Themen:
@@ -18,29 +54,7 @@ Fokus auf Verwendung von SSH, Fingerprint Yes/no --> Keygen Bildchen und Keyaust
 
 Advanced: Package Typing analysis, Zeit zwischen Paket senden und Eingabe
 
-## Restart (fresh setup from 0)
-
-```
-docker compose down && docker compose up -d
-```
-
-## Rebuild (when change in Dockerfile)
-
-```
-docker compose down && docker compose up -d --build
-```
-
-## Connect to client or server
-
-```
-# For the server container
-docker exec -it ssh-server bash -l
-
-# For the client container
-docker exec -it ssh-client bash -l
-```
-## Questions: 
+## Questions:
 
 - ps not installed in the base image of rocky linux? Fine to install such things?
 - should create default users or keep image minimal?
-
