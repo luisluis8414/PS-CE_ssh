@@ -57,8 +57,18 @@ Advanced: Package Typing analysis, Zeit zwischen Paket senden und Eingabe
 ## Questions:
 
 - ps not installed in the base image of rocky linux? Fine to install such things?
-- should create default users or keep image minimal?
+- tunneling?
 
 ssh chat.shazow.net
 
 ssh nethack@alt.org
+
+ssh play@ascii.town
+
+ssh sshtron.zachlatta.com
+
+ssh netris.rocketnine.space
+
+ssh starwarstel.net
+
+https://overthewire.org/wargames/
