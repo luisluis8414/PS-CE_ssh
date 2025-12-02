@@ -33,7 +33,7 @@ docker compose down && docker compose up -d
 ## Rebuild (when change in Dockerfile)
 
 ```
-docker compose down && docker compose up -d --build
+   docker compose down && docker compose up -d --build
 ```
 
 https://www.jfranken.de/homepages/johannes/vortraege/ssh3.de.html
@@ -58,3 +58,7 @@ Advanced: Package Typing analysis, Zeit zwischen Paket senden und Eingabe
 
 - ps not installed in the base image of rocky linux? Fine to install such things?
 - should create default users or keep image minimal?
+
+ssh chat.shazow.net
+
+ssh nethack@alt.org

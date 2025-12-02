@@ -3,7 +3,8 @@ FROM docker.io/rockylinux/rockylinux:10.0
  
 # openssh-clients: Enthält ssh, scp, sftp, ssh-keygen
 # nano: Zum Schreiben von Dateien
-RUN dnf install -y openssh-clients nano && \
+RUN dnf install -y epel-release && \
+    dnf install -y openssh-clients nano sl && \
     dnf clean all
 
 # user erstellen
