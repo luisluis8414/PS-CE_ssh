@@ -11,7 +11,7 @@ cd infrastructure
 start the containers:
 
 ```bash
-docker composer up -d
+docker compose up -d
 ```
 
 connect to either container:

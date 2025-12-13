@@ -135,6 +135,94 @@ Once you accept the fingerprint, SSH stores the host key in your `~/.ssh/known_h
 
 For this tutorial, type `yes` to continue.
 
+### Step 2.5: Understanding Host Key Verification in Practice
+
+Now that you have connected once and accepted the server's host key, let's see what happens when a server's key changes unexpectedly.
+
+**1. First, exit the SSH session if you're still connected:**
+
+```bash
+exit
+```
+
+**2. On the server terminal, delete the existing host keys and generate new ones:**
+
+```bash
+sudo rm /etc/ssh/ssh_host_*
+sudo ssh-keygen -A
+sudo pkill sshd
+sudo /usr/sbin/sshd
+```
+
+**3. On the client terminal, try to connect again:**
+
+```bash
+ssh admin@ssh-server
+```
+
+You will see a warning message like this:
+
+```
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:xxxxxxxxxxxxxxxxxxxxx.
+Please contact your system administrator.
+Add correct host key in /home/student/.ssh/known_hosts to get rid of this message.
+Offending key in /home/student/.ssh/known_hosts:1
+Host key for ssh-server has changed and you have requested strict checking.
+Host key verification failed.
+```
+
+#### What just happened?
+
+SSH detected that the server's host key is different from the one stored in your `~/.ssh/known_hosts` file. This is exactly what SSH is designed to do: protect you from connecting to a server that might not be who it claims to be.
+
+#### Why can't an attacker just copy the fingerprint?
+
+You might wonder: if the fingerprint is derived from the public key, and public keys are meant to be shared, why can't an attacker simply copy the server's public key and pretend to be the server?
+
+The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server _has_ the public key - it verifies that the server _owns_ the corresponding private key. This is done through a cryptographic challenge: the client sends a challenge that can only be correctly answered by someone who possesses the private key to the public key used for the identification[^9].
+
+An attacker can copy the public key and fingerprint, but without the private key (which never leaves the server), they cannot prove ownership. This is why protecting the server's private key is critical - if an attacker obtains both the public and private key, they can fully impersonate the server.
+
+In a real scenario, this warning could mean:
+
+- **Legitimate cause**: The server was reinstalled, or the administrator regenerated the host keys
+- **Security threat**: An attacker is impersonating the server (man-in-the-middle attack)
+
+#### Resolving the warning
+
+Since we know we intentionally changed the server's keys, we can safely remove the old key from our known_hosts file:
+
+```bash
+ssh-keygen -R ssh-server
+```
+
+You should see:
+
+```
+# Host ssh-server found: line 1
+/home/student/.ssh/known_hosts updated.
+Original contents retained as /home/student/.ssh/known_hosts.old
+```
+
+Now connect again:
+
+```bash
+ssh admin@ssh-server
+```
+
+You will be prompted to verify the new fingerprint, just like the first time. Type `yes` to accept it.
+
+---
+
+**Key takeaway**: Never blindly remove a host key warning in a production environment. Always verify with your system administrator that the key change was intentional before proceeding.
+
 **3. Enter the password when prompted:**
 
 ```
@@ -286,6 +374,7 @@ Port 1234
 ```
 
 (Remove the `#` to uncomment the line)
+(You can search in nano using ctrl + f)
 
 **3. Save the file** (Ctrl+O, Enter, Ctrl+X)
 
@@ -404,6 +493,425 @@ These changes significantly improve your SSH security by:
 1. **Reducing automated attacks** - Most bots scan only port 22
 2. **Eliminating password guessing** - No password means no brute force attacks
 3. **Adding defense in depth** - Even if your private key is stolen, the attacker still needs your passphrase
+
+---
+
+## What is SCP?
+
+**SCP** (Secure Copy Protocol) is a command-line tool that uses SSH to securely transfer files between a local and a remote host, or between two remote hosts [^5][^6]. It provides the same level of encryption and authentication as SSH itself.
+
+### Basic SCP Syntax
+
+```bash
+scp [options] source destination
+```
+
+Where source and destination can be:
+
+- A local path: `/path/to/file`
+- A remote path: `user@host:/path/to/file`
+
+Common options include:
+
+| Option | Description                            |
+| ------ | -------------------------------------- |
+| `-P`   | Specify the SSH port (uppercase P!)    |
+| `-r`   | Recursively copy entire directories    |
+| `-p`   | Preserve modification times and modes  |
+| `-q`   | Quiet mode, suppresses progress output |
+
+---
+
+## What is SFTP?
+
+**SFTP** (SSH File Transfer Protocol) is an interactive file transfer program that works over SSH [^1]. Unlike SCP, which is designed for simple file copies, SFTP provides an interactive session where you can navigate directories, list files, and perform multiple operations.
+
+### SCP vs SFTP
+
+| Feature           | SCP                        | SFTP                          |
+| ----------------- | -------------------------- | ----------------------------- |
+| Mode              | Non-interactive            | Interactive                   |
+| Use case          | Single file/directory copy | Multiple operations, browsing |
+| Resume transfers  | No                         | Yes                           |
+| Directory listing | No                         | Yes                           |
+
+---
+
+## Exercise 3: Transferring Files with SCP and SFTP
+
+In this exercise, you will transfer a simple Python web server from the client to the server using both SCP and SFTP.
+
+### Prerequisites
+
+Make sure you have completed Exercise 2 and have:
+
+- SSH key authentication set up
+- SSH running on port 1234
+- Password authentication disabled
+
+### Step 1: Examine the Web Server
+
+In the **client terminal**, there is already a simple Python web server file. Take a look at it:
+
+```bash
+cat server.py
+```
+
+You should see:
+
+```python
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class MyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'''
+<!DOCTYPE html>
+<html>
+<head><title>SSH Tutorial</title></head>
+<body style="font-family: monospace; text-align: center; padding: 50px;">
+    <h1>Hello from the server!</h1>
+</body>
+</html>
+''')
+
+    def log_message(self, format, *args):
+        print(f"Request received: {args[0]}")
+
+print("Server running on port 8080...")
+print("Press Ctrl+C to stop")
+HTTPServer(('127.0.0.1', 8080), MyHandler).serve_forever()
+```
+
+This is a minimal HTTP server that:
+
+- Listens only on `127.0.0.1` (localhost), making it inaccessible from outside the server
+- Returns a custom HTML page with a success message
+- Runs on port 8080
+
+### Step 2: Transfer the File Using SCP
+
+Now let's copy the file to the server using SCP:
+
+```bash
+scp -P 1234 server.py admin@ssh-server:~/
+```
+
+Let's break down this command:
+
+- `-P 1234`: Connect to SSH on port 1234 (note: uppercase P for SCP, lowercase p for SSH)
+- `server.py`: The local file to copy
+- `admin@ssh-server:~/`: The destination - the admin user's home directory on ssh-server
+
+Enter your key passphrase when prompted. You should see output like:
+
+```
+server.py                                     100%  195    50.0KB/s   00:00
+```
+
+### Step 3: Verify the Transfer
+
+Connect to the server and verify the file exists:
+
+```bash
+ssh -p 1234 admin@ssh-server
+```
+
+```bash
+ls -la server.py
+cat server.py
+```
+
+The file should be present with the same content. Exit the session:
+
+```bash
+exit
+```
+
+### Step 4: Transfer Files Using SFTP
+
+Now let's explore SFTP's interactive mode. First, remove the file from the server so we can transfer it again:
+
+```bash
+ssh -p 1234 admin@ssh-server "rm server.py"
+```
+
+Start an SFTP session:
+
+```bash
+sftp -P 1234 admin@ssh-server
+```
+
+You will see an interactive prompt:
+
+```
+sftp>
+```
+
+#### Exploring SFTP Commands
+
+Try these commands to explore the SFTP interface:
+
+```sftp
+pwd           # Print remote working directory
+lpwd          # Print local working directory
+ls            # List remote files
+lls           # List local files
+```
+
+Notice the pattern: commands prefixed with `l` operate on the **l**ocal machine.
+
+#### Uploading the File
+
+Upload the server file:
+
+```sftp
+put server.py
+```
+
+Verify it was uploaded:
+
+```sftp
+ls -la
+```
+
+You should see `server.py` in the listing.
+
+#### Other Useful SFTP Commands
+
+| Command         | Description                 |
+| --------------- | --------------------------- |
+| `get filename`  | Download a file from server |
+| `put filename`  | Upload a file to server     |
+| `mget *.txt`    | Download multiple files     |
+| `mput *.txt`    | Upload multiple files       |
+| `mkdir dirname` | Create remote directory     |
+| `rm filename`   | Delete remote file          |
+| `cd dirname`    | Change remote directory     |
+| `lcd dirname`   | Change local directory      |
+| `help`          | Show all available commands |
+
+Exit the SFTP session:
+
+```sftp
+bye
+```
+
+---
+
+**Congratulations!** You have successfully:
+
+- Created a simple Python web server
+- Transferred files using SCP
+- Used SFTP interactively to upload files and navigate directories
+
+---
+
+## What is SSH Port Forwarding?
+
+**SSH Port Forwarding** (also called SSH tunneling) allows you to securely forward network traffic through an encrypted SSH connection [^3][^7]. This is useful for:
+
+- Accessing services that are only available on localhost
+- Bypassing firewalls securely
+- Encrypting traffic for protocols that don't have built-in encryption
+
+### Types of Port Forwarding
+
+| Type                    | Flag | Description                                     |
+| ----------------------- | ---- | ----------------------------------------------- |
+| Local Port Forwarding   | `-L` | Forward a local port to a remote destination    |
+| Remote Port Forwarding  | `-R` | Forward a remote port to a local destination    |
+| Dynamic Port Forwarding | `-D` | Create a SOCKS proxy through the SSH connection |
+
+In this exercise, we will focus on **Local Port Forwarding**.
+
+### Local Port Forwarding Syntax
+
+```bash
+ssh -L [local_address:]local_port:destination_address:destination_port user@ssh_server
+```
+
+For example:
+
+```bash
+ssh -L 9000:127.0.0.1:8080 admin@server
+```
+
+This forwards `localhost:9000` on your machine to `127.0.0.1:8080` on the server.
+
+---
+
+## Exercise 4: SSH Port Forwarding
+
+In this exercise, you will start the web server on the remote machine and use SSH port forwarding to access it from the client.
+
+### The Scenario
+
+The web server we transferred binds to `127.0.0.1:8080`. This means:
+
+- It only accepts connections from the server itself (localhost)
+- It cannot be accessed directly from the client or any other machine
+- This is a common security practice for internal services
+
+SSH port forwarding allows us to securely access this localhost-only service from our client machine.
+
+### Step 1: Start the Web Server on the Server
+
+In the **server terminal**, start the Python web server:
+
+```bash
+cd ~
+python3 server.py &
+```
+
+The `&` runs the server in the background. You should see:
+
+```
+Server running on port 8080...
+Press Ctrl+C to stop
+```
+
+Press Enter to get your prompt back.
+
+Verify the server is running:
+
+```bash
+curl http://127.0.0.1:8080
+```
+
+You should see the HTML response:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SSH Tutorial</title>
+  </head>
+  <body style="font-family: monospace; text-align: center; padding: 50px;">
+    <h1>Hello from the server!</h1>
+  </body>
+</html>
+```
+
+This confirms the server is working locally.
+
+### Step 2: Verify the Server is Not Accessible from the Client
+
+In the **client terminal**, try to access the server directly:
+
+```bash
+curl http://ssh-server:8080
+```
+
+This will fail with a connection refused error because the server only listens on `127.0.0.1`, not on the network interface.
+
+### Step 3: Set Up Local Port Forwarding
+
+Now let's create an SSH tunnel to access the server. In the **client terminal**:
+
+```bash
+ssh -p 1234 -L 9000:127.0.0.1:8080 -f -N admin@ssh-server
+```
+
+Let's break down this command:
+
+- `-p 1234`: Connect to SSH on port 1234
+- `-L 9000:127.0.0.1:8080`: Forward local port 9000 to 127.0.0.1:8080 on the server
+- `-f`: Run SSH in the background after authentication
+- `-N`: Don't execute a remote command (just forward ports)
+- `admin@ssh-server`: The SSH server to connect through
+
+Enter your key passphrase. The tunnel is now running in the background.
+
+You can verify the tunnel is running:
+
+```bash
+ps aux | grep ssh
+```
+
+### Step 4: Access the Server Through the Tunnel
+
+Now access the forwarded port:
+
+```bash
+curl http://127.0.0.1:9000
+```
+
+You should see the HTML response:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SSH Tutorial</title>
+  </head>
+  <body style="font-family: monospace; text-align: center; padding: 50px;">
+    <h1>Hello from the server!</h1>
+  </body>
+</html>
+```
+
+The same output we saw on the server! The traffic flows like this:
+
+```
+Client (curl) → localhost:9000 → [SSH Tunnel] → ssh-server:22 → 127.0.0.1:8080 (Python server)
+```
+
+### Step 5: Understanding the Traffic Flow
+
+Here's what happens when you access `localhost:9000`:
+
+1. Your curl request connects to `localhost:9000` on the client
+2. SSH intercepts this connection and encrypts it
+3. The encrypted traffic travels through the SSH connection to the server
+4. On the server, SSH decrypts the traffic and forwards it to `127.0.0.1:8080`
+5. The Python server responds, and the response travels back through the tunnel
+
+All traffic is encrypted, and the server remains inaccessible from the network.
+
+### Step 6: Clean Up
+
+Stop the SSH tunnel by killing the background SSH process:
+
+```bash
+pkill -f "ssh -p 1234 -L"
+```
+
+In the **server terminal**, stop the Python server:
+
+```bash
+pkill python3
+```
+
+---
+
+**Congratulations!** You have successfully:
+
+- Started a localhost-only web server
+- Created an SSH tunnel using local port forwarding
+- Accessed a remote localhost service securely through the tunnel
+- Understood how SSH port forwarding protects and enables access to internal services
+
+---
+
+## Port Forwarding Summary
+
+| What we did                    | Command                                                  |
+| ------------------------------ | -------------------------------------------------------- |
+| Start server (server)          | `python3 server.py &`                                    |
+| Create tunnel (client)         | `ssh -p 1234 -L 9000:127.0.0.1:8080 -N admin@ssh-server` |
+| Access through tunnel (client) | `curl http://127.0.0.1:9000`                             |
+
+### Real-World Use Cases
+
+SSH port forwarding is commonly used for:
+
+- **Database access**: Forward a local port to a remote database that only accepts localhost connections
+- **Web administration**: Access admin panels that are restricted to localhost
+- **Development**: Test services in remote environments without exposing them to the network
+- **Bypassing firewalls**: Access services on ports that are blocked by firewalls (but SSH is allowed)
 
 ---
 
