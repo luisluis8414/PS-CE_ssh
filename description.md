@@ -70,10 +70,7 @@ In the **server terminal**, perform the following steps:
 
 **1. Generate SSH host keys:**
 
-Every SSH server needs its own unique cryptographic keys, called host keys, to identify itself to clients. These host keys serve two purposes:
-
-- They prove the server's identity (so clients know they're connecting to the real server, not an imposter)
-- They help establish the encrypted connection
+Every SSH server needs its own unique cryptographic keys, called host keys, to identify itself to clients.
 
 `ssh-keygen` is used to generate these host keys [^8]. Generate the host keys by running:
 
@@ -81,9 +78,7 @@ Every SSH server needs its own unique cryptographic keys, called host keys, to i
 sudo ssh-keygen -A
 ```
 
-The `-A` flag "generates host keys of all default key types (rsa, ecdsa, and ed25519) if they do not already exist" [^8]. Without these keys, the SSH daemon cannot start.
-
-However most of the time this will already have happened automatically and you won't have to do this yourself.
+The `-A` flag generates host keys of all default key types (rsa, ecdsa, and ed25519) if they do not already exist [^8]. Multiple key types are generated to ensure compatibility with different SSH clients. Older clients may only support RSA, while modern clients prefer Ed25519. Without these keys, the SSH daemon cannot start.
 
 **2. Start the SSH daemon:**
 
@@ -135,6 +130,12 @@ Once you accept the fingerprint, SSH stores the host key in your `~/.ssh/known_h
 
 For this tutorial, type `yes` to continue.
 
+Then when prompted enter the admins user password.
+
+You should now be connected to the server!
+
+You can type `exit` to close the connection.
+
 ### Step 2.5: Understanding Host Key Verification in Practice
 
 Now that you have connected once and accepted the server's host key, let's see what happens when a server's key changes unexpectedly.
@@ -150,11 +151,16 @@ exit
 ```bash
 sudo rm /etc/ssh/ssh_host_*
 sudo ssh-keygen -A
+```
+
+**3. Restart the ssh server:**
+
+```bash
 sudo pkill sshd
 sudo /usr/sbin/sshd
 ```
 
-**3. On the client terminal, try to connect again:**
+**4. On the client terminal, try to connect again:**
 
 ```bash
 ssh admin@ssh-server
@@ -184,9 +190,9 @@ SSH detected that the server's host key is different from the one stored in your
 
 #### Why can't an attacker just copy the fingerprint?
 
-You might wonder: if the fingerprint is derived from the public key, and public keys are meant to be shared, why can't an attacker simply copy the server's public key and pretend to be the server?
+You might wonder, if the fingerprint is derived from the public key, and public keys are meant to be shared, why can't an attacker simply copy the server's public key and pretend to be the server?
 
-The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server _has_ the public key - it verifies that the server _owns_ the corresponding private key. This is done through a cryptographic challenge: the client sends a challenge that can only be correctly answered by someone who possesses the private key to the public key used for the identification[^9].
+The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server _has_ the public key, it verifies that the server _owns_ the corresponding private key. This is done through a cryptographic challenge. The client sends a challenge that can only be correctly answered by someone who possesses the private key to the public key used for the identification.
 
 An attacker can copy the public key and fingerprint, but without the private key (which never leaves the server), they cannot prove ownership. This is why protecting the server's private key is critical - if an attacker obtains both the public and private key, they can fully impersonate the server.
 
@@ -286,7 +292,7 @@ ssh-keygen -t ed25519 -C "student@ssh-client"
 You will be prompted for:
 
 1. **File location**: Press Enter to accept the default (`~/.ssh/id_ed25519`)
-2. **Passphrase**: Enter a secure passphrase (e.g., `MySecurePass123!`)
+2. **Passphrase**: Enter a secure passphrase
 
 ```
 Generating public/private ed25519 key pair.
@@ -492,7 +498,7 @@ These changes significantly improve your SSH security by:
 
 1. **Reducing automated attacks** - Most bots scan only port 22
 2. **Eliminating password guessing** - No password means no brute force attacks
-3. **Adding defense in depth** - Even if your private key is stolen, the attacker still needs your passphrase
+3. **Securing your key** - Even if your private key is stolen, the attacker still needs your passphrase
 
 ---
 
@@ -540,14 +546,6 @@ Common options include:
 ## Exercise 3: Transferring Files with SCP and SFTP
 
 In this exercise, you will transfer a simple Python web server from the client to the server using both SCP and SFTP.
-
-### Prerequisites
-
-Make sure you have completed Exercise 2 and have:
-
-- SSH key authentication set up
-- SSH running on port 1234
-- Password authentication disabled
 
 ### Step 1: Examine the Web Server
 
@@ -753,7 +751,6 @@ The web server we transferred binds to `127.0.0.1:8080`. This means:
 
 - It only accepts connections from the server itself (localhost)
 - It cannot be accessed directly from the client or any other machine
-- This is a common security practice for internal services
 
 SSH port forwarding allows us to securely access this localhost-only service from our client machine.
 
@@ -903,15 +900,6 @@ pkill python3
 | Start server (server)          | `python3 server.py &`                                    |
 | Create tunnel (client)         | `ssh -p 1234 -L 9000:127.0.0.1:8080 -N admin@ssh-server` |
 | Access through tunnel (client) | `curl http://127.0.0.1:9000`                             |
-
-### Real-World Use Cases
-
-SSH port forwarding is commonly used for:
-
-- **Database access**: Forward a local port to a remote database that only accepts localhost connections
-- **Web administration**: Access admin panels that are restricted to localhost
-- **Development**: Test services in remote environments without exposing them to the network
-- **Bypassing firewalls**: Access services on ports that are blocked by firewalls (but SSH is allowed)
 
 ---
 
