@@ -8,7 +8,7 @@ RUN dnf install -y epel-release && \
     dnf clean all
 
 RUN useradd -m student && \
-    echo "student:student123" | chpasswd
+    echo "student:Nf7$kQ2@rG8!bT4%" | chpasswd
 
 RUN mkdir -p /home/student/.ssh && \
     chmod 700 /home/student/.ssh

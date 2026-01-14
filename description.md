@@ -31,14 +31,12 @@ When you connect via SSH:
 
 **OpenSSH** is the most widely used implementation of that protocol. It is a free, open source software suite developed by the OpenBSD project [^1]. When you use commands like `ssh`, `scp`, or `sshd` on Linux, macOS, or Windows, you are almost always using OpenSSH.
 
-### OpenSSH Tools
+### OpenSSH Tools and Config-Files
 
 Beyond the core `ssh` client and `sshd` server, OpenSSH provides additional tools [^1]:
 
 | Tool          | Description                                                   |
 | ------------- | ------------------------------------------------------------- |
-| `ssh_config`  | The client configuration file                                 |
-| `sshd_config` | The daemon configuration file                                 |
 | `ssh-keygen`  | Key generation tool for creating authentication keys          |
 | `ssh-copy-id` | Tool to install your public key on a remote server            |
 | `ssh-agent`   | An authentication agent that can store private keys           |
@@ -48,6 +46,13 @@ Beyond the core `ssh` client and `sshd` server, OpenSSH provides additional tool
 | `sftp-server` | SFTP server subsystem (started automatically by sshd)         |
 | `ssh-keyscan` | Utility for gathering public host keys from a number of hosts |
 | `ssh-keysign` | Helper program for host-based authentication                  |
+
+SSH has two configuration files, for client and server/daemon
+
+| Config        | Description                                                   |
+| ------------- | ------------------------------------------------------------- |
+| `ssh_config`  | The client configuration file                                 |
+| `sshd_config` | The daemon configuration file                                 |
 
 In this tutorial, we will focus on `ssh`, `sshd`, `ssh-keygen`, and `scp`.
 
@@ -59,10 +64,10 @@ Now let's put this into practice! You will configure the SSH server for password
 
 These are the users and passwords you will use in each container:
 
-| Container  | User    | Password   |
-| ---------- | ------- | ---------- |
-| ssh-server | admin   | admin123   |
-| ssh-client | student | student123 |
+| Container  | User    | Password         |
+| ---------- | ------- | ---------------- |
+| ssh-server | admin   | 4j6$9*BAof78     |
+| ssh-client | student | Nf7$kQ2@rG8!bT4% |
 
 ### Step 1: Configure the SSH Server
 

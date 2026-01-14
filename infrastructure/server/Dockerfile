@@ -8,7 +8,7 @@ RUN dnf install -y openssh-server nano procps-ng sudo python3 && \
 
 # user erstellen
 RUN useradd -m admin && \
-    echo "admin:admin123" | chpasswd && \
+    echo "admin:4j6$9*BAof78" | chpasswd && \
     usermod -aG wheel admin
     
 USER admin
