@@ -1,14 +1,13 @@
 # Als Basis-Image Rocky-Linux 10.0 (oder alternativ 9.4) 
 FROM docker.io/rockylinux/rockylinux:10.0 
 
-# 1. openssh-server: Der Daemon
-# 2. nano: Damit die User configs bearbeiten können
-RUN dnf install -y openssh-server nano procps-ng sudo python3 && \
+RUN dnf install -y epel-release && \
+    dnf install -y openssh-server nano sl procps-ng sudo python3 && \
     dnf clean all
 
 # user erstellen
 RUN useradd -m admin && \
-    echo "admin:4j6$9*BAof78" | chpasswd && \
+    echo 'admin:4j6$9*BAof78' | chpasswd && \
     usermod -aG wheel admin
     
 USER admin

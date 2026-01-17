@@ -1,74 +1,36 @@
 # PS-CE_ssh
 
-## Tutorial
+An SSH tutorial environment using Docker containers.
 
-To setup the container environments:
+## Quick Start
+
+### 1. Setup
 
 ```bash
 cd infrastructure
-```
-
-start the containers:
-
-```bash
 docker compose up -d
 ```
 
-connect to either container:
+### 2. Connect to Containers
 
 ```bash
-# For the server container
+# Server container
 docker exec -it ssh-server bash -l
 
-# For the client container
+# Client container
 docker exec -it ssh-client bash -l
 ```
 
-## Restart (fresh setup from 0)
+## Maintenance
 
-```
-docker compose down && docker compose up -d
-```
+| Action                             | Command                                               |
+| ---------------------------------- | ----------------------------------------------------- |
+| Restart (fresh setup)              | `docker compose down && docker compose up -d`         |
+| Rebuild (after Dockerfile changes) | `docker compose down && docker compose up -d --build` |
+| Stop containers                    | `docker compose down`                                 |
 
-## Rebuild (when change in Dockerfile)
+## Fun
 
-```
-   docker compose down && docker compose up -d --build
-```
-
-https://www.jfranken.de/homepages/johannes/vortraege/ssh3.de.html
-
-Themen:
-
-1. SSH
-   1. Keygen
-   2. Logins im Vergleich
-      -> Passwort, Key, Key with passphrase, ssh agent
-   3. Tunnel
-   4. Fingerprint --> SHA1 MD5 Collisions, storing, usage
-2. SCP
-   1. SCP vs FTP
-   2. SFTP
-
-Fokus auf Verwendung von SSH, Fingerprint Yes/no --> Keygen Bildchen und Keyaustausch
-
-Advanced: Package Typing analysis, Zeit zwischen Paket senden und Eingabe
-
-## Questions:
-
-- ps not installed in the base image of rocky linux? Fine to install such things?
-- tunneling?
-
-ssh chat.shazow.net
-
-ssh nethack@alt.org
-
-ssh play@ascii.town
-
-ssh sshtron.zachlatta.com
-
-ssh netris.rocketnine.space
-
+```bash
 ssh starwarstel.net
-
-https://overthewire.org/wargames/
+```

@@ -23,7 +23,7 @@ When you connect via SSH:
 2. The server sends its public host key for verification
 3. A secure encrypted channel is established
 4. User authentication occurs (password or public key)
-5. The user gains access to the remote shell
+5. The user gains access to a remote shell
 
 ### SSH vs OpenSSH
 
@@ -49,10 +49,10 @@ Beyond the core `ssh` client and `sshd` server, OpenSSH provides additional tool
 
 SSH has two configuration files, for client and server/daemon
 
-| Config        | Description                                                   |
-| ------------- | ------------------------------------------------------------- |
-| `ssh_config`  | The client configuration file                                 |
-| `sshd_config` | The daemon configuration file                                 |
+| Config        | Description                   |
+| ------------- | ----------------------------- |
+| `ssh_config`  | The client configuration file |
+| `sshd_config` | The daemon configuration file |
 
 In this tutorial, we will focus on `ssh`, `sshd`, `ssh-keygen`, and `scp`.
 
@@ -66,7 +66,7 @@ These are the users and passwords you will use in each container:
 
 | Container  | User    | Password         |
 | ---------- | ------- | ---------------- |
-| ssh-server | admin   | 4j6$9*BAof78     |
+| ssh-server | admin   | 4j6$9\*BAof78    |
 | ssh-client | student | Nf7$kQ2@rG8!bT4% |
 
 ### Step 1: Configure the SSH Server
@@ -82,6 +82,15 @@ Every SSH server needs its own unique cryptographic keys, called host keys, to i
 ```bash
 sudo ssh-keygen -A
 ```
+
+#### What are Host Keys?
+
+Host keys are the server's identity credentials, similar to how a passport identifies a person. They consist of a key pair:
+
+- **Private host key**: Stored securely on the server (e.g., `/etc/ssh/ssh_host_ed25519_key`). This key never leaves the server and is used to prove the server's identity.
+- **Public host key**: Can be shared freely (e.g., `/etc/ssh/ssh_host_ed25519_key.pub`). Clients use this to verify the server's identity.
+
+When a client connects, the server uses its private key to cryptographically prove that it is the legitimate owner of the public key. This prevents attackers from impersonating the server [^10].
 
 The `-A` flag generates host keys of all default key types (rsa, ecdsa, and ed25519) if they do not already exist [^8]. Multiple key types are generated to ensure compatibility with different SSH clients. Older clients may only support RSA, while modern clients prefer Ed25519. Without these keys, the SSH daemon cannot start.
 
@@ -114,9 +123,21 @@ ssh admin@ssh-server
 When you connect, you will see a message like this:
 
 ```
-The authenticity of host 'ssh-server (172.x.x.x)' can't be established.
-ED25519 key fingerprint is SHA256:xxxxxxxxxxxxxxxxxxxxx.
-Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+The authenticity of host 'ssh-server (172.26.0.3)' can't be established.
+ED25519 key fingerprint is SHA256:8pmGxniBRZ9GGpBansNW9MwLtE4Exjz4SGPwOI6daVo.
++--[ED25519 256]--+
+|.. ++=* .        |
+| o=.*+.X .       |
+|oo.O +* B        |
+|ooooB= o .       |
+|..E...+ S        |
+| +   o = o       |
+|.   . = =        |
+|     o .         |
+|                 |
++----[SHA256]-----+
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
 ```
 
 #### What is a Fingerprint?
@@ -126,6 +147,36 @@ Remember the host keys we generated earlier on the server? This is where they co
 #### Why does this matter?
 
 This verification step protects you against **server spoofing** or **man-in-the-middle attacks**. Without it, an attacker could intercept your connection and pretend to be the server, capturing your password or data. By verifying the fingerprint, you ensure you're connecting to the real server [^9][^3].
+
+#### Visualizing Fingerprints with Randomart
+
+SSH can also display fingerprints as ASCII art, called "randomart". This visual representation is easier for humans to recognize at a glance than a long string of hexadecimal characters [^8].
+
+**On the server**, you can display the randomart of the host key:
+
+```bash
+ssh-keygen -lv -f /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+The `-l` flag lists the fingerprint, and `-v` (verbose) adds the randomart visualization:
+
+```
+[admin@ssh-server ~]$ ssh-keygen -lv -f /etc/ssh/ssh_host_ed25519_key.pub
+256 SHA256:hoyCu7bN35XPCL29yQ2xu0lDO0QgfRUTES2ytJTdhHY root@ssh-server (ED25519)
++--[ED25519 256]--+
+|       ...  +BX. |
+|        ...* =.E |
+|          +.= o  |
+| .   o .  .o     |
+|. . . o S  +     |
+| . .   .. + +    |
+|.      . + B     |
+| oo   . o O O    |
+|o..o.. . o @o.   |
++----[SHA256]-----+
+```
+
+When you connect from the client, SSH will display the same randomart, allowing you to visually compare them. This is enabled by the `VisualHostKey yes` option in the client configuration.
 
 #### How to verify a fingerprint
 
@@ -197,9 +248,9 @@ SSH detected that the server's host key is different from the one stored in your
 
 You might wonder, if the fingerprint is derived from the public key, and public keys are meant to be shared, why can't an attacker simply copy the server's public key and pretend to be the server?
 
-The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server _has_ the public key, it verifies that the server _owns_ the corresponding private key. This is done through a cryptographic challenge. The client sends a challenge that can only be correctly answered by someone who possesses the private key to the public key used for the identification.
+The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server has the public key, it verifies that the server owns the corresponding private key. The server proves this by signing part of the key exchange with its private key. The client then verifies this signature using the public key [^10].
 
-An attacker can copy the public key and fingerprint, but without the private key (which never leaves the server), they cannot prove ownership. This is why protecting the server's private key is critical - if an attacker obtains both the public and private key, they can fully impersonate the server.
+An attacker can copy the public key, but without the private key (which never leaves the server), they cannot prove ownership. This is why protecting the server's private key is critical. If an attacker obtains both the public and private key, they can fully impersonate the server.
 
 In a real scenario, this warning could mean:
 
@@ -230,14 +281,12 @@ ssh admin@ssh-server
 
 You will be prompted to verify the new fingerprint, just like the first time. Type `yes` to accept it.
 
----
-
 **Key takeaway**: Never blindly remove a host key warning in a production environment. Always verify with your system administrator that the key change was intentional before proceeding.
 
 **3. Enter the password when prompted:**
 
 ```
-admin@ssh-server's password: admin123
+admin@ssh-server's password: 4j6$9*BAof78
 ```
 
 **4. You are now connected!** You should see a new prompt like:
@@ -254,7 +303,7 @@ Try some commands on the remote server:
 whoami
 hostname
 pwd
-ls -la
+sl -la  # or was it ls? ;)
 ```
 
 ### Step 4: Exit the SSH Session
@@ -325,6 +374,22 @@ You can view your public key with:
 cat ~/.ssh/id_ed25519.pub
 ```
 
+#### The ~/.ssh Directory
+
+The `~/.ssh` directory is the central location for all SSH-related files for a user. It is created automatically when you first use SSH or generate keys.
+
+| File              | Description                                                                  |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `id_ed25519`      | Your private key (default name for Ed25519 keys)                             |
+| `id_ed25519.pub`  | Your public key                                                              |
+| `known_hosts`     | List of server public keys you have previously accepted                      |
+| `authorized_keys` | Public keys allowed to log in as this user (server-side)                     |
+| `config`          | Client configuration file for custom settings (e.g., aliases, default ports) |
+
+The directory and its contents should have strict permissions. SSH will refuse to use keys if the permissions are too open [^3].
+
+This ensures only you can read your private key.
+
 ### Step 2: Copy the Public Key to the Server
 
 Now we need to install your public key on the server. The `ssh-copy-id` command automates this process:
@@ -333,7 +398,7 @@ Now we need to install your public key on the server. The `ssh-copy-id` command 
 ssh-copy-id admin@ssh-server
 ```
 
-Enter the password (`admin123`) when prompted. This command copies your public key to the server's `~/.ssh/authorized_keys` file.
+Enter the password (`4j6$9*BAof78`) when prompted. This command copies your public key to the server's `~/.ssh/authorized_keys` file.
 
 You should see output like:
 
@@ -479,7 +544,31 @@ ssh -p 1234 admin@ssh-server
 
 Enter your passphrase and you should be connected!
 
----
+#### Simplifying Connections with SSH Config
+
+Instead of typing `ssh -p 1234 admin@ssh-server` every time, you can create an alias in your `~/.ssh/config` file:
+
+```bash
+nano ~/.ssh/config
+```
+
+Add the following:
+
+```
+Host server1
+    HostName ssh-server
+    User admin
+    Port 1234
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+Now you can simply connect with:
+
+```bash
+ssh server1
+```
+
+SSH will automatically use the correct hostname, user, port, and key.
 
 **Congratulations!** You have successfully:
 
@@ -488,8 +577,7 @@ Enter your passphrase and you should be connected!
 - Changed the SSH port to a non-standard port
 - Disabled password authentication
 - Verified that only key authentication works
-
----
+- Created a config with an alias for easier connection
 
 ### Security Summary
 
@@ -504,8 +592,6 @@ These changes significantly improve your SSH security by:
 1. **Reducing automated attacks** - Most bots scan only port 22
 2. **Eliminating password guessing** - No password means no brute force attacks
 3. **Securing your key** - Even if your private key is stolen, the attacker still needs your passphrase
-
----
 
 ## What is SCP?
 
@@ -530,8 +616,6 @@ Common options include:
 | `-r`   | Recursively copy entire directories    |
 | `-p`   | Preserve modification times and modes  |
 | `-q`   | Quiet mode, suppresses progress output |
-
----
 
 ## What is SFTP?
 
@@ -896,8 +980,6 @@ pkill python3
 - Accessed a remote localhost service securely through the tunnel
 - Understood how SSH port forwarding protects and enables access to internal services
 
----
-
 ## Port Forwarding Summary
 
 | What we did                    | Command                                                  |
@@ -915,18 +997,24 @@ pkill python3
 - OpenBSD SSH Manual: https://man.openbsd.org/ssh
 - Linux SSH Manual: https://man7.org/linux/man-pages/man1/ssh.1.html
 
-https://learn.microsoft.com/en-us/azure/devops/repos/git/use-ssh-keys-to-authenticate?view=azure-devops
-
-https://datatracker.ietf.org/doc/html/rfc4251#section-4.1
-
 ## References
 
 [^1]: OpenSSH. "OpenSSH Official Website." https://www.openssh.org/
+
 [^2]: Red Hat Documentation. "Chapter 12. OpenSSH | System Administrator's Guide." https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/system_administrators_guide/ch-openssh
+
 [^3]: OpenBSD. "ssh(1) - OpenSSH remote login client." https://man.openbsd.org/ssh
+
 [^4]: Linux Manual Pages. "ssh(1) - OpenSSH remote login client." https://man7.org/linux/man-pages/man1/ssh.1.html
+
 [^5]: Linux Manual Pages. "scp(1) - OpenSSH secure file copy." https://man7.org/linux/man-pages/man1/scp.1.html
+
 [^6]: OpenBSD. "scp(1) - OpenSSH secure file copy." https://man.openbsd.org/scp.1
+
 [^7]: Cloudflare. "What is SSH?" https://www.cloudflare.com/learning/access-management/what-is-ssh/
+
 [^8]: OpenBSD. "ssh-keygen(1) - OpenSSH authentication key utility." https://man.openbsd.org/ssh-keygen
+
 [^9]: Ylonen, T., & Lonvick, C. _"RFC 4251 – The Secure Shell (SSH) Protocol Architecture."_ Internet Engineering Task Force (IETF). https://datatracker.ietf.org/doc/html/rfc4251
+
+[^10]: Ylonen, T. and C. Lonvick, "The Secure Shell (SSH) Transport Layer Protocol", RFC 4253, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4253
