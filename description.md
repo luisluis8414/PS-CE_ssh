@@ -2,9 +2,9 @@
 
 ## What is SSH?
 
-**SSH** (Secure Shell) is a cryptographic network protocol that enables users to log into remote machines and execute commands securely. It uses cryptography to authenticate and encrypt connections between devices, ensuring that sensitive data cannot be intercepted during transmission [^3][^7].
+**SSH** (Secure Shell) is a cryptographic network protocol that enables users to log into remote machines and execute commands securely. It is intended to provide secure encrypted communications between two untrusted hosts over an insecure network [^3]. SSH uses cryptography to authenticate and encrypt connections between devices, ensuring that sensitive data cannot be intercepted during transmission [^7].
 
-Beyond simple remote access, SSH also enables tunneling (also known as port forwarding), which allows data packets to traverse networks they would not otherwise be able to cross. Common use cases for SSH include controlling servers remotely, managing infrastructure, and transferring files securely [^7].
+The SSH protocol architecture provides three core security properties: **confidentiality** through encryption, **integrity** protection through message authentication codes, and **authentication** of both server and client [^9]. Common use cases for SSH include controlling servers remotely, managing infrastructure, and transferring files securely over protocols such as SCP (Secure Copy Protocol) and SFTP (SSH File Transfer Protocol), both of which leverage SSH [^7][^12].
 
 ### Why SSH?
 
@@ -19,11 +19,19 @@ SSH operates on a client-server architecture [^2]:
 
 When you connect via SSH:
 
-1. The client contacts the server and they negotiate encryption algorithms
-2. The server sends its public host key for verification
-3. A secure encrypted channel is established
-4. User authentication occurs (password or public key)
-5. The user gains access to a remote shell
+1. **Connection initiation**: The client contacts the server on the designated port and both parties exchange identification strings containing their supported protocol versions [^10].
+
+2. **Algorithm negotiation**: Client and server negotiate which cryptographic algorithms to use for key exchange, encryption, message authentication codes (MACs), and compression [^10].
+
+3. **Key exchange**: Using an algorithm such as Diffie-Hellman, client and server generate a shared session key without ever transmitting it over the network. This key will be used to encrypt all subsequent communication [^10][^14].
+
+4. **Server authentication**: The server proves its identity by demonstrating possession of its private host key. The client verifies this against previously stored keys to prevent man-in-the-middle attacks [^10][^3]. The details of this verification process including fingerprints, the `known_hosts` file, and what happens when keys change are covered in [Exercise 1](#exercise-1-your-first-ssh-connection).
+
+5. **Secure channel establishment**: With the shared session key in place, all further communication is encrypted, ensuring confidentiality and integrity of the data transmitted between client and server [^9].
+
+6. **User authentication**: The client authenticates the user to the server using one of several supported methods, like password authentication or public key authentication. In public key authentication, the client proves possession of a private key corresponding to a public key stored on the server [^13].
+
+7. **Session start**: Upon successful authentication, the server grants access and the user receives an interactive shell or can execute commands remotely [^14].
 
 ### SSH vs OpenSSH
 
@@ -54,7 +62,23 @@ SSH has two configuration files, for client and server/daemon
 | `ssh_config`  | The client configuration file |
 | `sshd_config` | The daemon configuration file |
 
-In this tutorial, we will focus on `ssh`, `sshd`, `ssh-keygen`, and `scp`.
+In this tutorial, we will focus on `ssh`, `sshd`, `ssh-keygen`, `ssh-copy-id`, `scp` and `sftp`.
+
+### The ~/.ssh Directory
+
+The `~/.ssh` directory is the central location for all SSH-related files for a user. It is created automatically when you first use SSH or generate keys.
+
+| File              | Description                                                                  |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `id_ed25519`      | Your private key (default name for Ed25519 keys)                             |
+| `id_ed25519.pub`  | Your public key                                                              |
+| `known_hosts`     | List of server public keys you have previously accepted                      |
+| `authorized_keys` | Public keys allowed to log in as this user (server-side)                     |
+| `config`          | Client configuration file for custom settings (e.g., aliases, default ports) |
+
+The directory and its contents should have strict permissions. SSH will refuse to use keys if the permissions are too open [^3].
+
+This ensures only you can read your private key.
 
 ## Exercise 1: Your First SSH Connection
 
@@ -118,9 +142,9 @@ In the **client terminal**, perform the following steps:
 ssh admin@ssh-server
 ```
 
-**2. Accept the servers host key:**
+**2. Accept the server's host key:**
 
-When you connect, you will see a message like this:
+When you connect for the first time, SSH doesn't yet know if the server is legitimate. It displays the server's fingerprint and asks you to verify it:
 
 ```
 The authenticity of host 'ssh-server (172.26.0.3)' can't be established.
@@ -140,61 +164,76 @@ This key is not known by any other names.
 Are you sure you want to continue connecting (yes/no/[fingerprint])?
 ```
 
+Before typing `yes`, let's understand what this means and how to verify it.
+
 #### What is a Fingerprint?
 
 Remember the host keys we generated earlier on the server? This is where they come into play. A fingerprint is a short, unique identifier derived from the server's public host key using a hash function (like SHA256). Since public keys are very long, fingerprints provide a shorter way to verify a key's identity [^9][^4].
 
-#### Why does this matter?
+The ASCII art you see is called **randomart**. A visual representation of the fingerprint that is easier for humans to recognize at a glance than a hexadecimal string [^8].
 
-This verification step protects you against **server spoofing** or **man-in-the-middle attacks**. Without it, an attacker could intercept your connection and pretend to be the server, capturing your password or data. By verifying the fingerprint, you ensure you're connecting to the real server [^9][^3].
+#### Why Does This Matter?
 
-#### Visualizing Fingerprints with Randomart
+This verification step protects you against **man-in-the-middle attacks**. Without it, an attacker could intercept your connection and impersonate the server, capturing your password or data [^9][^3].
 
-SSH can also display fingerprints as ASCII art, called "randomart". This visual representation is easier for humans to recognize at a glance than a long string of hexadecimal characters [^8].
+But why does verifying the fingerprint actually prove the server's identity? The fingerprint is derived from the server's **public host key**, and during the connection, the server must prove it possesses the corresponding **private key** by signing part of the key exchange. An attacker could copy the public key, but without the private key (which never leaves the server), they cannot produce a valid signature. So when the fingerprint matches, you know you're talking to a server that holds the real private key [^10].
 
-**On the server**, you can display the randomart of the host key:
+#### How to Verify the Fingerprint
+
+In a production environment, you would obtain the server's fingerprint through a trusted channel (e.g., from the system administrator in person, or from secure documentation) and compare it to what SSH displays [^9].
+
+For this tutorial, let's verify by checking the fingerprint directly on the server. **In the server terminal**, run:
 
 ```bash
 ssh-keygen -lv -f /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-The `-l` flag lists the fingerprint, and `-v` (verbose) adds the randomart visualization:
+You should see output like (The randomart and fingerprint should of course be different than this example):
 
 ```
-[admin@ssh-server ~]$ ssh-keygen -lv -f /etc/ssh/ssh_host_ed25519_key.pub
-256 SHA256:hoyCu7bN35XPCL29yQ2xu0lDO0QgfRUTES2ytJTdhHY root@ssh-server (ED25519)
+256 SHA256:8pmGxniBRZ9GGpBansNW9MwLtE4Exjz4SGPwOI6daVo root@ssh-server (ED25519)
 +--[ED25519 256]--+
-|       ...  +BX. |
-|        ...* =.E |
-|          +.= o  |
-| .   o .  .o     |
-|. . . o S  +     |
-| . .   .. + +    |
-|.      . + B     |
-| oo   . o O O    |
-|o..o.. . o @o.   |
+|.. ++=* .        |
+| o=.*+.X .       |
+|oo.O +* B        |
+|ooooB= o .       |
+|..E...+ S        |
+| +   o = o       |
+|.   . = =        |
+|     o .         |
+|                 |
 +----[SHA256]-----+
 ```
 
-When you connect from the client, SSH will display the same randomart, allowing you to visually compare them. This is enabled by the `VisualHostKey yes` option in the client configuration.
+Compare the SHA256 hash and the randomart with what the client displayed. If they match, the server is authentic.
 
-#### How to verify a fingerprint
+#### Accept the Key
 
-In a secure environment, you would obtain the server's fingerprint through a trusted channel [^9] (e.g., from the system administrator in person, via a secure channel, or from documentation) and compare it to what SSH displays. If they match, you can safely type `yes`.
+**In the client terminal**, type `yes` to accept the fingerprint.
 
-Once you accept the fingerprint, SSH stores the host key in your `~/.ssh/known_hosts` (or `/etc/ssh/ssh_known_hosts` if the user is root) file. On future connections, SSH automatically compares the server's key against this stored copy. If the key has changed unexpectedly, SSH will warn you and disables pasword authentication [^3]. This could indicate an attack or simply that the server was reinstalled.
+SSH now stores this host key in your `~/.ssh/known_hosts` file. On future connections, SSH will automatically verify the server against this stored key. If the key ever changes unexpectedly, SSH will display a warning and refuse the connection to protect you from potential attacks [^3].
 
-For this tutorial, type `yes` to continue.
+**3. Enter the password when prompted:**
 
-Then when prompted enter the admins user password.
+```
+admin@ssh-server's password:
+```
 
-You should now be connected to the server!
+Enter the admin password: `4j6$9*BAof78`
+
+**4. You're connected!**
+
+You should see a new prompt:
+
+```
+[admin@ssh-server ~]$
+```
 
 You can type `exit` to close the connection.
 
-### Step 2.5: Understanding Host Key Verification in Practice
+### Step 3: Understanding Host Key Verification in Practice
 
-Now that you have connected once and accepted the server's host key, let's see what happens when a server's key changes unexpectedly.
+Now that you have connected once and accepted the server's host key, let's see what happens when a server's key changes unexpectedly, which could be an indication for an attack.
 
 **1. First, exit the SSH session if you're still connected:**
 
@@ -242,15 +281,7 @@ Host key verification failed.
 
 #### What just happened?
 
-SSH detected that the server's host key is different from the one stored in your `~/.ssh/known_hosts` file. This is exactly what SSH is designed to do: protect you from connecting to a server that might not be who it claims to be.
-
-#### Why can't an attacker just copy the fingerprint?
-
-You might wonder, if the fingerprint is derived from the public key, and public keys are meant to be shared, why can't an attacker simply copy the server's public key and pretend to be the server?
-
-The answer lies in how SSH verifies the server's identity. During the connection, SSH doesn't just check if the server has the public key, it verifies that the server owns the corresponding private key. The server proves this by signing part of the key exchange with its private key. The client then verifies this signature using the public key [^10].
-
-An attacker can copy the public key, but without the private key (which never leaves the server), they cannot prove ownership. This is why protecting the server's private key is critical. If an attacker obtains both the public and private key, they can fully impersonate the server.
+SSH detected that the server's host key is different from the one stored for this server in your `~/.ssh/known_hosts` file. This is exactly what SSH is designed to do: protect you from connecting to a server that might not be who it claims to be.
 
 In a real scenario, this warning could mean:
 
@@ -283,19 +314,19 @@ You will be prompted to verify the new fingerprint, just like the first time. Ty
 
 **Key takeaway**: Never blindly remove a host key warning in a production environment. Always verify with your system administrator that the key change was intentional before proceeding.
 
-**3. Enter the password when prompted:**
+**5. Enter the password when prompted:**
 
 ```
 admin@ssh-server's password: 4j6$9*BAof78
 ```
 
-**4. You are now connected!** You should see a new prompt like:
+**6. You are now connected!** You should see a new prompt like:
 
 ```
 [admin@ssh-server ~]$
 ```
 
-### Step 3: Explore Your Connection
+### Step 4: Explore Your Connection
 
 Try some commands on the remote server:
 
@@ -306,7 +337,7 @@ pwd
 sl -la  # or was it ls? ;)
 ```
 
-### Step 4: Exit the SSH Session
+### Step 5: Exit the SSH Session
 
 To disconnect from the server, type:
 
@@ -323,7 +354,6 @@ You will return to the client's shell.
 - Configured an SSH server with password authentication
 - Connected to a remote machine using SSH
 - Executed commands on a remote system
-- Safely disconnected from the session
 
 ---
 
@@ -373,22 +403,6 @@ You can view your public key with:
 ```bash
 cat ~/.ssh/id_ed25519.pub
 ```
-
-#### The ~/.ssh Directory
-
-The `~/.ssh` directory is the central location for all SSH-related files for a user. It is created automatically when you first use SSH or generate keys.
-
-| File              | Description                                                                  |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `id_ed25519`      | Your private key (default name for Ed25519 keys)                             |
-| `id_ed25519.pub`  | Your public key                                                              |
-| `known_hosts`     | List of server public keys you have previously accepted                      |
-| `authorized_keys` | Public keys allowed to log in as this user (server-side)                     |
-| `config`          | Client configuration file for custom settings (e.g., aliases, default ports) |
-
-The directory and its contents should have strict permissions. SSH will refuse to use keys if the permissions are too open [^3].
-
-This ensures only you can read your private key.
 
 ### Step 2: Copy the Public Key to the Server
 
@@ -585,7 +599,7 @@ SSH will automatically use the correct hostname, user, port, and key.
 | ------------------------ | -------------------------------- |
 | Port 22 (default)        | Port 1234 (non-standard)         |
 | Password authentication  | Public key authentication        |
-| No passphrase protection | Passphrase-protected private key |
+| No passphrase protection | Passphrase protected private key |
 
 These changes significantly improve your SSH security by:
 
@@ -796,7 +810,9 @@ bye
 
 ---
 
-## What is SSH Port Forwarding?
+## SSH Port Forwarding / Tunneling
+
+### What is SSH Port Forwarding?
 
 **SSH Port Forwarding** (also called SSH tunneling) allows you to securely forward network traffic through an encrypted SSH connection [^3][^7]. This is useful for:
 
@@ -806,11 +822,10 @@ bye
 
 ### Types of Port Forwarding
 
-| Type                    | Flag | Description                                     |
-| ----------------------- | ---- | ----------------------------------------------- |
-| Local Port Forwarding   | `-L` | Forward a local port to a remote destination    |
-| Remote Port Forwarding  | `-R` | Forward a remote port to a local destination    |
-| Dynamic Port Forwarding | `-D` | Create a SOCKS proxy through the SSH connection |
+| Type                   | Flag | Description                                  |
+| ---------------------- | ---- | -------------------------------------------- |
+| Local Port Forwarding  | `-L` | Forward a local port to a remote destination |
+| Remote Port Forwarding | `-R` | Forward a remote port to a local destination |
 
 In this exercise, we will focus on **Local Port Forwarding**.
 
@@ -942,7 +957,7 @@ You should see the HTML response:
 The same output we saw on the server! The traffic flows like this:
 
 ```
-Client (curl) → localhost:9000 → [SSH Tunnel] → ssh-server:22 → 127.0.0.1:8080 (Python server)
+Client (curl) → localhost:9000 → [SSH Tunnel] → ssh-server:1234 → 127.0.0.1:8080 (Python server)
 ```
 
 ### Step 5: Understanding the Traffic Flow
@@ -999,22 +1014,30 @@ pkill python3
 
 ## References
 
-[^1]: OpenSSH. "OpenSSH Official Website." https://www.openssh.org/
+[^1]: OpenSSH. "OpenSSH Official Website." Available: https://www.openssh.org/
 
-[^2]: Red Hat Documentation. "Chapter 12. OpenSSH | System Administrator's Guide." https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/system_administrators_guide/ch-openssh
+[^2]: Red Hat. "Chapter 12. OpenSSH." _System Administrator's Guide_. Available: https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/system_administrators_guide/ch-openssh
 
-[^3]: OpenBSD. "ssh(1) - OpenSSH remote login client." https://man.openbsd.org/ssh
+[^3]: OpenBSD. "ssh(1) – OpenSSH Remote Login Client." _OpenBSD Manual Pages_. Available: https://man.openbsd.org/ssh
 
-[^4]: Linux Manual Pages. "ssh(1) - OpenSSH remote login client." https://man7.org/linux/man-pages/man1/ssh.1.html
+[^4]: Linux. "ssh(1) – OpenSSH Remote Login Client." _Linux Manual Pages_. Available: https://man7.org/linux/man-pages/man1/ssh.1.html
 
-[^5]: Linux Manual Pages. "scp(1) - OpenSSH secure file copy." https://man7.org/linux/man-pages/man1/scp.1.html
+[^5]: Linux. "scp(1) – OpenSSH Secure File Copy." _Linux Manual Pages_. Available: https://man7.org/linux/man-pages/man1/scp.1.html
 
-[^6]: OpenBSD. "scp(1) - OpenSSH secure file copy." https://man.openbsd.org/scp.1
+[^6]: OpenBSD. "scp(1) – OpenSSH Secure File Copy." _OpenBSD Manual Pages_. Available: https://man.openbsd.org/scp.1
 
-[^7]: Cloudflare. "What is SSH?" https://www.cloudflare.com/learning/access-management/what-is-ssh/
+[^7]: Cloudflare. "What is SSH?" Available: https://www.cloudflare.com/learning/access-management/what-is-ssh/
 
-[^8]: OpenBSD. "ssh-keygen(1) - OpenSSH authentication key utility." https://man.openbsd.org/ssh-keygen
+[^8]: OpenBSD. "ssh-keygen(1) – OpenSSH Authentication Key Utility." _OpenBSD Manual Pages_. Available: https://man.openbsd.org/ssh-keygen
 
-[^9]: Ylonen, T., & Lonvick, C. _"RFC 4251 – The Secure Shell (SSH) Protocol Architecture."_ Internet Engineering Task Force (IETF). https://datatracker.ietf.org/doc/html/rfc4251
+[^9]: Ylonen, T. and Lonvick, C. "The Secure Shell (SSH) Protocol Architecture." RFC 4251, IETF, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4251
 
-[^10]: Ylonen, T. and C. Lonvick, "The Secure Shell (SSH) Transport Layer Protocol", RFC 4253, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4253
+[^10]: Ylonen, T. and Lonvick, C. "The Secure Shell (SSH) Transport Layer Protocol." RFC 4253, IETF, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4253
+
+[^11]: SolarWinds. "SCP vs. SFTP: What Are the Key Differences?" _IT Glossary_. Available: https://www.solarwinds.com/resources/it-glossary/scp-vs-sftp
+
+[^12]: Ylonen, T. and Lonvick, C. "The Secure Shell (SSH) Authentication Protocol." RFC 4252, IETF, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4252
+
+[^13]: Ylonen, T. and Lonvick, C. "The Secure Shell (SSH) Connection Protocol." RFC 4254, IETF, January 2006. Available: https://datatracker.ietf.org/doc/html/rfc4254
+
+[^14]: DigitalOcean. "Understanding the SSH Encryption and Connection Process." April 2022. Available: https://www.digitalocean.com/community/tutorials/understanding-the-ssh-encryption-and-connection-process
